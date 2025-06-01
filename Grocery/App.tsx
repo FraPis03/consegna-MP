@@ -7,8 +7,11 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { BlurView } from 'expo-blur';
 import { Picker } from '@react-native-picker/picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import SQLite from 'react-native-sqlite-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import MultiSlider from '@ptomasroos/react-native-multi-slider';
+import { PieChart } from 'react-native-chart-kit';
 
 
 
@@ -27,8 +30,6 @@ const Main = ({route,navigation,categories}) => {
 
   const[spese,setSpese]=useState([]);
   const [selectedItem, setSelectedItem] = useState(null);
-  console.log("params",route?.params);
-
   const getImmagine = (nome: string) => {
   const hash = [...nome].reduce((acc, char) => acc + char.charCodeAt(0), 0);
   return immagini[hash % immagini.length];
@@ -39,7 +40,6 @@ const Main = ({route,navigation,categories}) => {
   const sp=route.params?.sp;
   const modify=route.params?.modify;
 
-  console.log(modifica,spesa,sp,modify);
 
   React.useEffect(() => {
   if (!spesa && !modify) return;
@@ -63,7 +63,6 @@ const liste1=route.params?.lista;
 const [liste,setListe]= useState([])
 
 React.useEffect(()=>{
-  console.log("Nuova lista ricevuta:", liste1);
   if(liste1 && Array.isArray(liste1)){
     setListe(prev=>[...prev,liste1]);}
 },[liste1]);
@@ -81,21 +80,20 @@ React.useEffect(()=>{
 
 
 
-  console.log("spese",spese);
-  console.log("spesa",spesa)
   return(
     <View style={styles.sfondo}>
        <Text style={{color:'white',fontSize:30,borderStyle:'solid',padding:10,
        borderRadius:14,backgroundColor:'red',marginTop:10,width:'100%',textAlign:'center',fontWeight:'bold'
        }}>Grocery</Text>
-        <Button title='Ricerca spesa o lista'
-        onPress={()=>navigation.navigate('Ricerca', {spese,liste,getImmagine,categories,onReturn:(tab,nome)=>{
+        <View style={{flexDirection:'row',gap:10}}>
+          <Button title='Ricerca spesa o lista'
+          onPress={()=>navigation.navigate('Ricerca', {spese,liste,getImmagine,categories,onReturn:(tab,nome)=>{
           if(tab=='Liste spesa') navigation.navigate(tab,{nome})
           else if(tab=='Main') setSelectedItem(nome)}})}/>
-
-
+          <Button title='Statistiche' onPress={()=>navigation.navigate('Statistiche',{spese,liste,categories})}/>
+        </View>
       <Text style={styles.t}>Ultime spese effettuate</Text>
-    <View style={{width:'100%',height:150}}>
+    <View style={{width:'100%',flex:1}}>
     <FlatList
  data={[...spese]
     .sort((a, b) => new Date(b.data) - new Date(a.data))
@@ -141,7 +139,7 @@ React.useEffect(()=>{
             <Text style={styles.titolo}> {selectedItem?.nome}</Text>
             <View style={{alignItems:'flex-start',width:'100%'}}>
             <Text style={styles.opt}>Quantità:<Text style={styles.sp}> {selectedItem?.quantita}</Text></Text>
-            <Text style={styles.opt}>Prezzo:<Text style={styles.sp}> {selectedItem?.prezzo}</Text></Text>
+            <Text style={styles.opt}>Prezzo:<Text style={styles.sp}> {selectedItem?.prezzo} €</Text></Text>
             <Text style={styles.opt}>Categoria:<Text style={styles.sp}> {selectedItem?.categoria}</Text></Text>
             <Text style={styles.opt}>Note:<Text style={styles.sp}> {selectedItem?.note}</Text></Text>
             <Text style={styles.opt}>Data:<Text style={styles.sp}> {new Date(selectedItem?.data).toLocaleDateString("it-IT")}</Text></Text>
@@ -155,7 +153,7 @@ React.useEffect(()=>{
             <Button
             title='Modifica'
             onPress={()=>{
-              navigation.navigate("Add uscita",{modifica:true,spesa:selectedItem});
+              navigation.navigate("Spese",{modifica:true,spesa:selectedItem});
               setSelectedItem(null);
             }}
             />
@@ -172,9 +170,9 @@ React.useEffect(()=>{
       </BlurView>
       </Modal>
       <Text style={{fontWeight:'bold',marginBottom:10}}>Liste della spesa</Text>
-      <View style={{flex:2,flexDirection:'column',gap:10,width:'100%'}}>
+      <View style={{flex:1,flexDirection:'column',gap:10,width:'100%'}}>
       <FlatList
- data={[...liste].slice(0,5)}
+ data={[...liste].slice().reverse().slice(0,5)}
      keyExtractor={(item, index) => index.toString()}
   contentContainerStyle={{ padding: 10 }}
   renderItem={({ item }) => (
@@ -206,10 +204,10 @@ React.useEffect(()=>{
     <View style={{flexDirection:'row',gap:10}}>
     
     <Button 
-    title='+ Aggiungi uscita' 
+    title='+ Aggiungi spesa' 
     color='red'
     onPress={()=>{
-      navigation.navigate("Add uscita");
+      navigation.navigate("Spese");
     }}
     />
     <Button
@@ -222,7 +220,7 @@ React.useEffect(()=>{
   </View>
 )};
 
-const AddUscita = ({route,navigation,categories}) => { 
+const AddSpesa = ({route,navigation,categories}) => { 
   
   const [spesa,setSpesa]=useState({
     nome:"",
@@ -269,28 +267,34 @@ const p3 = p2 ? {
   }, [p1, p2])
 );
 
-  console.log(val,spesa,p1,p2,mod)
 
   
   return mod ? (
-  <View style={styles.sfondo}>
-    <Text style={{fontSize:30,marginTop:10}}>Aggiungi Spesa</Text>
+  <ScrollView style={styles.sfondoCat} contentContainerStyle={{alignItems:'center',gap:15}}>
+    <Text style={{color:'white',fontSize:30,borderStyle:'solid',padding:10,
+       borderRadius:14,backgroundColor:'red',marginTop:10,width:'100%',textAlign:'center',fontWeight:'bold'
+       }}>Aggiungi Spesa</Text>
+       <Text style={{color:'red',fontSize:30,margin:10,textAlign:'center',fontWeight:'bold'}}> Spesa </Text>
     <TextInput placeholder='Nome Prodotto' style={styles.casella}
     value={spesa.nome}
     onChangeText={(str)=>{
       setSpesa({...spesa,nome:str})
     }}
     ></TextInput>
-    <TextInput placeholder='Quantità' style={styles.casella}
+    <TextInput placeholder='Quantità' style={styles.casella} keyboardType='numeric'
     value={spesa.quantita}
      onChangeText={(str)=>{
       setSpesa({...spesa,quantita:parseInt(str) || 0})
     }}
     ></TextInput>
-    <TextInput placeholder='Prezzo' style={styles.casella}
+    <TextInput placeholder='Prezzo' style={styles.casella} keyboardType='numeric'
     value={spesa.prezzo}
     onChangeText={(str)=>{
-      setSpesa({...spesa,prezzo:parseInt(str) || 0})
+      const filtrato=str.replace(/[^0-9.,]/g, '');
+      const virgole=(filtrato.match(/[.,]/g)||[]).length;
+      if (virgole>1) return;
+      const f=filtrato.replace(',','.');
+      setSpesa({...spesa,prezzo:f})
     }}
     ></TextInput>
       <Picker
@@ -316,8 +320,8 @@ const p3 = p2 ? {
   navigation.navigate("Main", {
     spesa: {
       ...spesa,
-      quantita: Number(spesa.quantita) || 0,
-      prezzo: Number(spesa.prezzo) || 0,
+      quantita: Number(spesa.quantita) || 1,
+      prezzo: (spesa.prezzo)||'0',
       data: spesa.data.toISOString()
     },
     modifica: false
@@ -333,33 +337,40 @@ const p3 = p2 ? {
   });
 }}
     />
-  </View>
+  </ScrollView>
   ) : (
-   <View style={styles.sfondo}>
-    <Text style={{fontSize:30,marginTop:10}}>Modifica Spesa</Text>
+   <ScrollView style={styles.sfondoCat} contentContainerStyle={{alignItems:'center',gap:15}}>
+    <Text style={{color:'white',fontSize:30,borderStyle:'solid',padding:10,
+       borderRadius:14,backgroundColor:'red',marginTop:10,width:'100%',textAlign:'center',fontWeight:'bold'
+       }}>Modifica Spesa</Text>
+       <Text style={{color:'red',fontSize:30,margin:10,textAlign:'center',fontWeight:'bold'}}></Text>
     <TextInput placeholder='Nome Prodotto' style={styles.casella}
     value={val.nome}
     onChangeText={(str)=>{
       setVal({...val,nome:str})
     }}
     ></TextInput>
-    <TextInput placeholder='Quantità' style={styles.casella}
+    <TextInput placeholder='Quantità' style={styles.casella} keyboardType='numeric'
     value={val.quantita?.toString() || ''}
      onChangeText={(str)=>{
       setVal({...val,quantita:parseInt(str) || 0})
     }}
     ></TextInput>
-    <TextInput placeholder='Prezzo' style={styles.casella}
-    value={val.prezzo?.toString() || ''}
+    <TextInput placeholder='Prezzo' style={styles.casella} keyboardType='numeric'
+    value={val.prezzo?.toString()||''}
     onChangeText={(str)=>{
-      setVal({...val,prezzo:parseInt(str) || 0})
+      const filtrato=str.replace(/[^0-9.,]/g, '');
+      const virgole=(filtrato.match(/[.,]/g)||[]).length;
+      if (virgole>1) return;
+      const f=filtrato.replace(',','.');
+      if(f!='') setVal({...val,prezzo:f}); else setVal({...val,prezzo:''})
     }}
     ></TextInput>
     <Picker
-    selectedValue={spesa.categoria}
+    selectedValue={val.categoria}
     style={styles.casella}
     onValueChange={(itemValue) =>
-    setSpesa({ ...spesa, categoria: itemValue })
+    setVal({ ...val, categoria: itemValue })
     }>
     <Picker.Item label="Seleziona categoria" value="" />
     {[...categories].map((cat, index) => (
@@ -397,12 +408,12 @@ const p3 = p2 ? {
   }}
 />
     <Text style={{fontSize:30}}>Oppure...</Text>
-    <Button title="Aggiungi uscita"
+    <Button title="Aggiungi spesa"
     onPress={() => {
-    navigation.navigate("Add uscita", { modifica: false, spesa: null });
+    navigation.navigate("Spese", { modifica: false, spesa: null });
   }}
     />
-  </View>
+  </ScrollView>
   )
  };
 
@@ -434,17 +445,25 @@ const p3 = p2 ? {
 
   let listaVisualizza = route.params?.nome;
 
-  useEffect(() => {
-    if (listaVisualizza) {
-      setView('lista');
-      setSel(listaVisualizza);
-      navigation.setParams({ nome: undefined });
-    }
-  }, [listaVisualizza]);
 
+  useEffect(() => {
+  if (listaVisualizza) {
+    const nomeListaVisualizzata = listaVisualizza[0]?.nome;
+    const listaTrovata = liste.find(
+      (lista) => lista[0]?.nome === nomeListaVisualizzata
+    );
+
+    if (listaTrovata) {
+      setView('lista');
+      setSel(listaTrovata);
+    }
+
+    navigation.setParams({ nome: undefined });
+  }
+}, [listaVisualizza, liste]);
   return (
     <View style={{ flex: 1, backgroundColor: 'white' }}>
-      <View style={{ flex: 1, gap: 10, alignItems: 'center' }}>
+      <View style={{ flex:1,gap: 10, alignItems: 'center' }}>
         <Text style={{
           color: 'white',
           fontSize: 30,
@@ -458,13 +477,12 @@ const p3 = p2 ? {
         }}>
           Liste della Spesa
         </Text>
-
         
-        <View style={{ display: view === 'liste' ? 'flex' : 'none', flex: 1, flexDirection: 'column', gap: 10, width: '90%' }}>
+        <View style={{ display: view === 'liste' ? 'flex' : 'none',flex:5, flexDirection: 'column', gap: 10, width: '90%',height:400}}>
           <FlatList
             data={liste}
             renderItem={({ item }) => (
-              <View style={{ flex: 1, flexDirection: 'column', width: '100%',marginBottom:15}}>
+              <View style={{ flexDirection: 'column', width: '100%',marginBottom:15}}>
                 <ImageBackground
         source={{
           uri: getImmagine(item[0].nome)
@@ -492,12 +510,14 @@ const p3 = p2 ? {
               </View>
             )}
           />
-          <View style={{ marginTop: 20, marginBottom: 10, alignItems: 'center' }}>
+        </View>
+        <View style={{ display: view === 'liste' ? 'flex' : 'none',flex:1}}>
             <Button title='Aggiungi lista' onPress={() => setView('add')} />
           </View>
-        </View>
 
-        <View style={{ display: view === 'add' ? 'flex' : 'none', flex: 1, flexDirection: 'column', gap: 10 }}>
+
+        <View style={{ display: view === 'add' ? 'flex' : 'none',flex:1,flexDirection: 'column', gap: 10 }}>
+        <View style={{flex:1}}>
           <Text style={{ fontSize: 30, fontWeight: 'bold', marginTop: 10, color: 'red', textAlign: 'center' }}>Lista</Text>
           <TextInput
             placeholder='Nome della lista'
@@ -508,14 +528,19 @@ const p3 = p2 ? {
             }}
             style={[styles.casella, { marginTop: 10 }]}
           />
-          <View style={{ flex: 1, flexDirection: 'column', gap: 10 }}>
-            <Text style={{ fontSize: 30, fontWeight: 'bold', marginTop: 10, color: 'red' }}>Prodotti della Lista</Text>
+          <Text style={{ fontSize: 30, fontWeight: 'bold', marginTop: 10, color: 'red' }}>Prodotti della Lista</Text>
+          </View>
+            <View style={{flex:1,gap:5,marginTop:5}}>
             <FlatList
               data={lista}
               renderItem={({ item }) => (
-                <Text style={{ fontSize: 30, fontWeight: 'bold', marginTop: 10 }}>{item.nome}</Text>
+                
+                <Text style={{ fontSize: 30, fontWeight: 'bold',padding:5 }}>{item.nome}</Text>
+                
               )}
             />
+            </View>
+            <View style={{flex:1}}>
             <TextInput
               placeholder='Nome prodotto'
               value={nomeProdotto}
@@ -531,7 +556,7 @@ const p3 = p2 ? {
                 }
               }}
             />
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            <View style={{   flexDirection: 'row', justifyContent: 'space-between',marginTop:5 }}>
               <Button
                 title='Salva'
                 disabled={disatt}
@@ -550,10 +575,10 @@ const p3 = p2 ? {
               <Button title='Annulla' color='red' onPress={() => setView('liste')} />
             </View>
           </View>
-        </View>
-
-        <View style={{ display: view === 'lista' ? 'flex' : 'none', width: '100%', alignItems: 'center' }}>
+       </View>
+        <View style={{ display: view === 'lista' ? 'flex' : 'none',flex:1, width: '100%', alignItems: 'center' }}>
           <Text style={{ fontSize: 30, fontWeight: 'bold', marginBottom: 10, color: 'red' }}>{sel[0]?.nome}</Text>
+          <View style={{flex:5}}>
           <FlatList
             data={sel.slice(1)}
             renderItem={({ item, index }) => (
@@ -573,6 +598,9 @@ const p3 = p2 ? {
                 check: !nuovaSel[index+1].check,
                  };
                  setSel(nuovaSel);
+                 setListe(prevListe =>
+                  prevListe.map(listaCorrente =>
+                   listaCorrente[0].nome === sel[0].nome ? nuovaSel: listaCorrente));
                  }}
                  style={{ marginRight: 5 }}
                   />
@@ -581,7 +609,8 @@ const p3 = p2 ? {
               </View>
             )}
           />
-          <View style={{ flexDirection: 'row', justifyContent: 'space-evenly', width: '100%', marginTop: 20 }}>
+          </View>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-evenly', width: '100%', marginTop: 20,marginBottom:5 }}>
             <Button title='Chiudi' onPress={() => { setView('liste'); setSel([]); }} />
             <Button
               title='Elimina'
@@ -612,23 +641,23 @@ const Ricerca = ({navigation, route}) => {
   const categorie=route.params?.categories ?? [];
 
   const speseFiltrate = spese.filter(spesa=>
-    (spesa.nome.toLowerCase().includes(ricerca.toLowerCase())||(spesa.data.includes(ricerca)))&&(categoria==''||spesa.categoria==categoria)&&(spesa.prezzo>=range[0]&&spesa.prezzo<=range[1]));
+    (spesa.nome.toLowerCase().includes(ricerca.toLowerCase())||(spesa.data.includes(ricerca)))&&(categoria==''||spesa.categoria==categoria)&&(spesa.prezzo>=range[0]&&(spesa.prezzo<=range[1]||(spesa.prezzo>range[1]&&range[1]==1000))));
   const listeFiltrate = liste.filter(lista=>
     lista[0].nome.toLowerCase().includes(ricerca.toLowerCase())||lista.some(prod=>prod.nome.toLowerCase().includes(ricerca.toLowerCase())));
 
   return (
-    <View showsVerticalScrollIndicator={false} style={styles.sfondoCat} contentContainerStyle={{alignItems:'center'}}>
-      <View style={{flexDirection:'row'}}>
+    <View style={styles.sfondo}>
+      <View style={{flexDirection:'row',gap:5,marginTop:5}}>
         <TextInput
           style={styles.casella}
-          placeholder="Inserisci la spesa o lista da ricercare"
+          placeholder="Cerca la spesa o la lista"
           value={ricerca} onChangeText={setRicerca}/>
-        <Button title='Filtri' onPress={()=>setViewFiltri(!viewFiltri)}/>
+        <Button title='Filtri' color='red' onPress={()=>setViewFiltri(!viewFiltri)}/>
       </View>
-      <View style={{backgroundColor:'lightgray',width:300,display:viewFiltri ? 'flex' : 'none'}}>
+      <View style={{backgroundColor:'lightgray',width:'90%',alignItems:'center',borderRadius:14,borderWidth:2,gap:10,display:viewFiltri ? 'flex' : 'none'}}>
         <Picker
           selectedValue={categoria}
-          style={styles.casella}
+          style={[styles.casella, { marginTop: 5 }]}
           onValueChange={(categoria)=>setCategoria(categoria)}>
           <Picker.Item label="Seleziona categoria" value="" />
           {[...(categorie || [])].map((cat, index)=>(
@@ -644,16 +673,17 @@ const Ricerca = ({navigation, route}) => {
         step={1}
         onValuesChange={(values) => setRange(values)}/>
       </View>
-      <Text>Spese:</Text>
+      <View style={{flex:1,width:'90%'}}>
+      <Text style={{fontSize:20,fontWeight:'bold',textAlign:'center',color:'red',marginBottom:5}}>Spese</Text>
       <FlatList data={speseFiltrate}
       renderItem={({ item }) => (
-        <View style={{ marginBottom: 15, width: '100%' }}>
+        <View style={{ marginBottom: 15,width:'100%'}}>
               <ImageBackground
                 source={{
                   uri: getImmagine(item.nome),
                 }}
                 resizeMode="cover"
-                style={{ borderRadius: 12 }}
+                style={{ borderRadius: 12 ,width:'100%'}}
                 imageStyle={{ borderRadius: 12 }}>
                 <Pressable
                   onPress={() =>{route.params.onReturn('Main',item);}}
@@ -662,14 +692,17 @@ const Ricerca = ({navigation, route}) => {
                     padding: 20,
                     backgroundColor: 'rgba(0, 0, 0, 0.2)',
                     borderRadius: 12,
+                    width:'100%',
                   }}>
                   <Text style={styles.sp1}>{item.nome}</Text>
                 </Pressable>
               </ImageBackground>
-            </View>)}
-      ListEmptyComponent={<Text>Nessuna spesa trovata!</Text>}/>
-
-      <Text>Liste:</Text>
+            </View>
+            )}
+      ListEmptyComponent={<Text style={{fontSize:20,fontWeight:'bold',textAlign:'center',marginBottom:5}}>Nessuna spesa trovata!</Text>}/>
+      </View>
+      <View style={{flex:1,width:'90%'}}>
+      <Text style={{fontSize:20,fontWeight:'bold',textAlign:'center',color:'red',marginBottom:5}}>Liste</Text>
       <FlatList data={listeFiltrate}
       renderItem={({ item }) => (
       <View style={{ marginBottom: 15, width: '100%' }}>
@@ -692,7 +725,8 @@ const Ricerca = ({navigation, route}) => {
                 </Pressable>
               </ImageBackground>
             </View>)}
-      ListEmptyComponent={<Text>Nessuna spesa trovata!</Text>}/>
+      ListEmptyComponent={<Text style={{fontSize:20,fontWeight:'bold',textAlign:'center',marginBottom:5}}>Nessuna Lista trovata!</Text>}/>
+      </View>
     </View>
   );
 };
@@ -704,8 +738,10 @@ const Categorie = ({ navigation,categories, setCategories }) => {
   };
 
   return (
-    <View style={styles.sfondoCat} contentContainerStyle={{alignItems:'center'}}>
-      <Text style={{fontSize:50,marginTop:50}}>Categorie</Text>
+    <View style={styles.sfondo}>
+      <Text style={{color:'white',fontSize:30,borderStyle:'solid',padding:10,
+       borderRadius:14,backgroundColor:'red',marginTop:10,width:'100%',textAlign:'center',fontWeight:'bold'
+       }}>Categorie</Text>
       <FlatList
         data={categories}
         contentContainerStyle={{paddingHorizontal: 15, paddingTop: 20,}}
@@ -761,6 +797,67 @@ const AggiungiCategoria = ({navigation, route}) => {
   );
 };
 
+const Statistiche = ({ navigation, route }) => {
+  const spese = route.params?.spese ?? [];
+  const categorie = route.params?.categories ?? [];
+  const [cats, setCats] = useState([]);
+  const [mensile, setMensile] = useState(0);
+  const colori = ['red', 'green', 'blue', 'yellow', 'orange', 'purple', 'gray', 'pink', 'gold', 'black', 'skyblue'];
+  const [agg,setAgg]=useState([{nome:'',quant:0}]);
+
+  useEffect(() => {
+    const iniziali = categorie.map((cat, index) => ({
+      name: cat,
+      quant: 0,
+      color: colori[index % colori.length],
+    }));
+
+    
+    let totale = 0.0;
+    spese.forEach(item => {
+      const mese=new Date().toISOString().substring(5,7);
+      const meseSpesa=item.data.substring(5,7);
+      if (meseSpesa==mese) totale+=(parseFloat(item.prezzo)||0.0);
+      const index=categorie.indexOf(item.categoria);
+      if(index>-1)iniziali[index].quant+=1;
+    });
+    setMensile(totale);
+    setCats(iniziali);
+  },[categorie, spese]);
+
+  useEffect(() => {
+    const aggregati=Object.values(
+      spese.reduce((acc, item) => {
+        if (!acc[item.nome]) acc[item.nome]={nome:item.nome,quant:0};
+        acc[item.nome].quant+=item.quantita;
+        return acc;
+      },{})
+    ).sort((a,b)=>b.quant-a.quant);
+    setAgg(aggregati);
+  },[spese]);
+  
+  return(
+    <View style={styles.sfondo}>
+      <Text style={{fontSize:20,fontWeight:'bold',marginTop:5,textAlign:'center'}}>Spesa totale del mese:{mensile} €</Text>
+      <Text style={{fontSize:20,fontWeight:'bold',marginTop:5,color:'red'}}>Spesa totale per categoria</Text>
+      <PieChart
+        data={cats}
+        width={300}
+        height={200}
+        chartConfig={{
+          color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+        }}
+        accessor="quant"
+        backgroundColor="transparent"
+        paddingLeft="15"
+        absolute 
+      />
+      <Text style={{fontSize:20,fontWeight:'bold',marginTop:5,color:'red'}}>Top 3 prodotti più acquistati</Text>
+      <FlatList data={agg.slice(0,3)}
+      renderItem={({item})=>(<Text style={{fontSize:20,fontWeight:'bold',marginTop:5}}>{item.nome} {item.quant}</Text>)}/>
+    </View>
+  );}
+
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -781,7 +878,7 @@ function Home({navigation,route}) {
 
   />
    
-      <Tab.Screen name="Add uscita" children={(props) => <AddUscita {...props} categories={categories} />} options={{headerShown:false}}/>
+      <Tab.Screen name="Spese" children={(props) => <AddSpesa {...props} categories={categories} />} options={{headerShown:false}}/>
       <Tab.Screen name="Liste spesa" component={Liste} options={{headerShown:false}}/>
       <Tab.Screen name="Categorie" children={(props) => <Categorie {...props} categories={categories} setCategories={setCategories} />} options={{headerShown:false}}/>
     </Tab.Navigator>
@@ -796,6 +893,7 @@ function App() {
         <Stack.Screen name='Ricerca' component={Ricerca}/>
         <Stack.Screen name="Categorie" component={Categorie} />
         <Stack.Screen name="AggiungiCategoria" component={AggiungiCategoria} />
+        <Stack.Screen name="Statistiche" component={Statistiche}/>
       </Stack.Navigator>
     </NavigationContainer>
   );
